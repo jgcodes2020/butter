@@ -251,7 +251,7 @@ namespace butter {
       x[3] -= y[3];
       return x;
     }
-    
+
     friend mat4 operator*(const mat4& x, float y) {
       return mat4 {x[0] * y, x[1] * y, x[2] * y, x[3] * y};
     }
@@ -265,7 +265,7 @@ namespace butter {
       x[3] *= y;
       return x;
     }
-    
+
     friend mat4 operator/(const mat4& x, float y) {
       return mat4 {x[0] / y, x[1] / y, x[2] / y, x[3] / y};
     }
@@ -275,6 +275,28 @@ namespace butter {
       x[2] /= y;
       x[3] /= y;
       return x;
+    }
+    // Multiplies a vector by a matrix on the rules of linear algebra.
+    friend vec4 operator*(const mat4& x, vec4 y) {
+      __m128 tmp0 = _mm_shuffle_ps(y, y, shuffle_mask(0, 0, 0, 0));
+      __m128 tmp1 = _mm_shuffle_ps(y, y, shuffle_mask(1, 1, 1, 1));
+      __m128 tmp2 = _mm_shuffle_ps(y, y, shuffle_mask(2, 2, 2, 2));
+      __m128 tmp3 = _mm_shuffle_ps(y, y, shuffle_mask(3, 3, 3, 3));
+
+      tmp0 = _mm_mul_ps(tmp0, x.m_cols[0]);
+      tmp1 = _mm_mul_ps(tmp1, x.m_cols[1]);
+      tmp2 = _mm_mul_ps(tmp2, x.m_cols[2]);
+      tmp3 = _mm_mul_ps(tmp3, x.m_cols[3]);
+
+      __m128 res = _mm_add_ps(tmp0, tmp1);
+      res        = _mm_add_ps(res, tmp2);
+      res        = _mm_add_ps(res, tmp3);
+
+      return res;
+    }
+    // Multiplies two matrices by the rules of linear algebra.
+    friend mat4 operator*(const mat4& x, const mat4& y) {
+      return mat4 {x * y[0], x * y[1], x * y[2], x * y[3]};
     }
   };
 
