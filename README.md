@@ -1,5 +1,4 @@
 # Butter
----
 
 A library implementing utility functions from Super Mario 64's code.
 
@@ -24,3 +23,7 @@ cmake -DCMAKE_BUILD_TYPE=Release ..
 ```
 
 I plan to add support for Conan later.
+
+## CMake options
+- **BUTTER_EXACT_FP** - `ON` by default. Ensures that FP calculations are done exactly as Super Mario 64 implements them.
+  - Disabling this allows us to use FMA and reorder dot products.

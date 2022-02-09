@@ -4,6 +4,7 @@
 #include <immintrin.h>
 
 #include <array>
+#include <cmath>
 #include <concepts>
 #include <cstdint>
 #include <stdexcept>
@@ -176,15 +177,15 @@ namespace butter {
   inline vec3 cross(vec3 a, vec3 b) {
     // Uses this:
     // https://geometrian.com/programming/tutorials/cross-product/index.php
-    const __m128 at = _mm_shuffle_ps(a, a, _MM_SHUFFLE(3, 0, 2, 1));
-    const __m128 bt = _mm_shuffle_ps(b, b, _MM_SHUFFLE(3, 0, 2, 1));
+    const __m128 at = _mm_shuffle_ps(a, a, shuffle_mask(1, 2, 0, 3));
+    const __m128 bt = _mm_shuffle_ps(b, b, shuffle_mask(1, 2, 0, 3));
 
     a = _mm_mul_ps(a, bt);
     b = _mm_mul_ps(b, at);
 
     __m128 res = _mm_sub_ps(a, b);
     // Shuffle into the right order
-    return _mm_shuffle_ps(res, res, _MM_SHUFFLE(3, 0, 2, 1));
+    return _mm_shuffle_ps(res, res, shuffle_mask(1, 2, 0, 3));
   }
   template <size_t L>
   inline vec<L> normalize(vec<L> x) {
@@ -199,6 +200,16 @@ namespace butter {
     constexpr uint8_t pshufb_c =
       (Mask & low_mask) | (shuffle_mask() & ~low_mask);
     return _mm_shuffle_ps(x, x, pshufb_c);
+  }
+  template <size_t L>
+  inline float distance_sq(vec<L> a, vec<L> b) {
+    vec<L> diff = a - b;
+    return dot(diff, diff);
+  }
+  template <size_t L>
+  inline float distance(vec<L> a, vec<L> b) {
+    vec<L> diff = a - b;
+    return std::sqrt(dot(diff, diff));
   }
 
   // Only doing 4x4 float matrix because SM64 only uses those
@@ -218,6 +229,18 @@ namespace butter {
 
     vec4& operator[](size_t x) { return m_cols[x & 3]; }
     const vec4& operator[](size_t x) const { return m_cols[x & 3]; }
+
+    // Returns the identity matrix.
+    static mat4 identity() {
+      // clang-format off
+      return mat4 {
+        1, 0, 0, 0,
+        0, 1, 0, 0,
+        0, 0, 1, 0,
+        0, 0, 0, 1
+      };
+      // clang-format on
+    }
 
     mat4 transpose() {
       mat4 res = *this;
@@ -282,17 +305,23 @@ namespace butter {
       __m128 tmp1 = _mm_shuffle_ps(y, y, shuffle_mask(1, 1, 1, 1));
       __m128 tmp2 = _mm_shuffle_ps(y, y, shuffle_mask(2, 2, 2, 2));
       __m128 tmp3 = _mm_shuffle_ps(y, y, shuffle_mask(3, 3, 3, 3));
+      if constexpr (config::use_exact_fp) {
+        tmp0 = _mm_mul_ps(tmp0, x.m_cols[0]);
+        tmp1 = _mm_mul_ps(tmp1, x.m_cols[1]);
+        tmp2 = _mm_mul_ps(tmp2, x.m_cols[2]);
+        tmp3 = _mm_mul_ps(tmp3, x.m_cols[3]);
 
-      tmp0 = _mm_mul_ps(tmp0, x.m_cols[0]);
-      tmp1 = _mm_mul_ps(tmp1, x.m_cols[1]);
-      tmp2 = _mm_mul_ps(tmp2, x.m_cols[2]);
-      tmp3 = _mm_mul_ps(tmp3, x.m_cols[3]);
-
-      __m128 res = _mm_add_ps(tmp0, tmp1);
-      res        = _mm_add_ps(res, tmp2);
-      res        = _mm_add_ps(res, tmp3);
-
-      return res;
+        __m128 res = _mm_add_ps(tmp0, tmp1);
+        res        = _mm_add_ps(res, tmp2);
+        res        = _mm_add_ps(res, tmp3);
+      }
+      else {
+        __m128 res = _mm_mul_ps(tmp0, x.m_cols[0]);
+        res        = _mm_fmadd_ps(tmp1, x.m_cols[1], res);
+        res        = _mm_fmadd_ps(tmp2, x.m_cols[2], res);
+        res        = _mm_fmadd_ps(tmp3, x.m_cols[3], res);
+        return res;
+      }
     }
     // Multiplies two matrices by the rules of linear algebra.
     friend mat4 operator*(const mat4& x, const mat4& y) {
